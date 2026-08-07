@@ -2,44 +2,63 @@
 
 The customer- and merchant-facing pages for [Konfirm](https://github.com/samuel2926i39-art/konfirm-backend), a non-custodial payment processor on Stellar.
 
-Sibling repos: [konfirm-backend](https://github.com/samuel2926i39-art/konfirm-backend) (the API these pages call) and [konfirm-contracts](https://github.com/samuel2926i39-art/konfirm-contracts) (Soroban contracts, not yet in the live request path).
+Sibling repos: [konfirm-backend](https://github.com/samuel2926i39-art/konfirm-backend) (the API this app calls, now a pure JSON API with no page-serving of its own) and [konfirm-contracts](https://github.com/samuel2926i39-art/konfirm-contracts) (Soroban contracts, not yet in the live request path).
 
 ## Pages
 
-| Page | Route | Purpose |
+| Route | File | Purpose |
 |---|---|---|
-| `public/signup.html` | `/signup` | Merchant account creation — business name, email, password, Stellar payout address |
-| `public/login.html` | `/login` | Merchant login |
-| `public/new.html` | `/new` | Create a payment link — amount, XLM/USDC toggle, description |
-| `public/pay.html` | `/pay/:linkId` | Checkout — Freighter *or* a SEP-7 QR code / tappable link for any Stellar mobile wallet, whichever the payer finishes first |
-| `public/activity.html` | `/activity` | Merchant dashboard — live payment feed, polls every 3s, per-asset totals |
-| `public/cashout.html` | `/cashout` | Fiat off-ramp — real SEP-10/SEP-24 flow against Stellar's reference anchor |
-| `public/vendor/qrcode.js` | — | Vendored QR encoder (MIT, kazuhikoarase/qrcode-generator) |
+| `/signup` | `src/app/signup/page.tsx` | Merchant account creation — business name, email, password, Stellar payout address |
+| `/login` | `src/app/login/page.tsx` | Merchant login |
+| `/new` | `src/app/new/page.tsx` | Create a payment link — amount, XLM/USDC toggle, description |
+| `/pay/:linkId` | `src/app/pay/[linkId]/page.tsx` | Checkout — Freighter *or* a SEP-7 QR code / tappable link for any Stellar mobile wallet, whichever the payer finishes first |
+| `/activity` | `src/app/activity/page.tsx` | Merchant dashboard — live payment feed, polls every 3s, per-asset totals |
+| `/cashout` | `src/app/cashout/page.tsx` | Fiat off-ramp — real SEP-10/SEP-24 flow against Stellar's reference anchor |
+| `/get-test-usdc` | `src/app/get-test-usdc/page.tsx` | Pulls test USDC from the reference anchor via Freighter, then forwards it to whatever wallet you're actually testing checkout with — not part of the merchant product |
 
-## Tech approach
+## Tech stack
 
-No framework, no bundler, no build step — plain HTML, CSS custom properties, and vanilla JS `<script type="module">` per page. This is a deliberate choice for a pilot this size: every page is small enough that a build pipeline would add more overhead than it saves, and it keeps "edit a file, refresh the browser" as the entire feedback loop.
+- **Next.js 16** (App Router, Turbopack), **React 19**, TypeScript
+- No CSS framework — a single hand-written token stylesheet (`src/app/globals.css`), consolidated from what used to be a per-page inline `<style>` block
+- Real npm dependencies for everything that used to be loaded some other way: `@stellar/freighter-api` (was an `esm.sh` CDN import) and `qrcode-generator` (was a vendored static file) — same upstream libraries, now installed like any other dependency instead of trusted to a CDN or hand-copied into the repo
 
-The one external dependency loaded at runtime is `@stellar/freighter-api`, imported from `esm.sh` in `pay.html` and `cashout.html`. The QR encoder is vendored rather than CDN-loaded on purpose — after tracing several bugs back to trusting an unverified CDN library's shape, anything whose exact behavior mattered got pulled in-repo instead.
+This is a rewrite of what was originally a plain-HTML `public/` directory served directly by `konfirm-backend`. That version is gone — this app is now the only place the frontend lives.
+
+## Backend-for-frontend (BFF) proxy
+
+The browser never talks to the NestJS API directly. `next.config.ts` rewrites everything under `/api/backend/*` to the real backend (`BACKEND_URL`, default `http://localhost:4001`), server-to-server, forwarding the full request — including the session cookie — and relaying the full response, including any `Set-Cookie`, untouched.
+
+This keeps auth same-origin from the browser's point of view: no CORS, no `SameSite=None`, no HTTPS-in-dev requirement. `src/lib/api.ts` exports `API_BASE = "/api/backend"`, which every page's `fetch` calls use — nothing in a page component ever needs to know the backend's real address.
 
 ## Running it locally
 
-These pages aren't a standalone app today — see [Current state](#current-state). To actually exercise them, run [konfirm-backend](https://github.com/samuel2926i39-art/konfirm-backend) (which serves its own copy of this same `public/` directory) and open `http://localhost:4001`.
+```bash
+npm install
+BACKEND_URL=http://localhost:4001 npm run dev
+```
 
-## Current state
+Requires [konfirm-backend](https://github.com/samuel2926i39-art/konfirm-backend) running separately (see that repo's README) and [Freighter](https://www.freighter.app/), set to Testnet, for exercising checkout, cash-out, or get-test-usdc yourself.
 
-Every page assumes it's running same-origin with the API: auth uses an httpOnly session cookie, and each script does `const API_BASE = window.location.origin`. This repo is the versioned source of the frontend, not an independently running site — the copy actually served today lives in `konfirm-backend/public/`.
+| Variable | Required | Notes |
+|---|---|---|
+| `BACKEND_URL` | No | Defaults to `http://localhost:4001`. Only read server-side by the rewrite — never exposed to the browser |
 
-Splitting this into a genuinely separately-deployed frontend (its own host, its own origin) would need:
-- CORS enabled on the backend
-- Cookie `SameSite`/`Secure` settings changed for cross-origin use
-- `API_BASE` pointed at a configured backend URL instead of `window.location.origin`
+## Verifying the proxy
 
-None of that has been done yet.
+Confirmed for real, not just by reading the rewrite config: signed up through `/api/backend/auth/signup`, checked the session cookie was set on the Next.js origin, then hit `/api/backend/auth/me` and an auth-guarded endpoint (`/api/backend/withdrawals/challenge`) with that same cookie and got the expected authenticated response back — the full cookie round trip through the proxy, not assumed from the config alone.
 
 ## Design language
 
-Dark by design, not by default — every page shares the same token set (`--ink`, `--surface`, `--accent`, etc.) defined inline per page rather than a shared stylesheet, matching the no-build-step approach. Status copy is written for the person using it: no "session," "reconciler," or "screening" ever reaches a customer-facing screen, and raw errors are filtered through an allowlist (`friendlyMessage()` in each page) before they're shown — anything not explicitly recognized falls back to a generic message, with the real error going to the console instead.
+Dark by design, not by default — one shared token set (`--ink`, `--surface`, `--accent`, etc.) in `globals.css` rather than the old approach of repeating the same tokens inline on every page. Status copy is written for the person using it: no "session," "reconciler," or "screening" ever reaches a customer-facing screen, and raw errors are filtered through an allowlist (`friendlyMessage()` in each page that needs it) before they're shown — anything not explicitly recognized falls back to a generic message, with the real error going to the console instead.
+
+## CI
+
+`.github/workflows/ci.yml` — install, lint, typecheck, `next build`, `npm audit --audit-level=high`. No database or backend dependency to stand up, since none of these checks make a real network call.
+
+## Known limitations
+
+- **Testnet only** — same as the backend; nothing here changes for mainnet beyond whatever `BACKEND_URL` points at in production.
+- **No E2E browser tests yet.** Every page has been typechecked, linted, built, and curl-verified against the live backend through the proxy, but nothing here drives an actual browser — Freighter's signature prompt and the anchor's interactive popup are both real UI a script can't click through headlessly. Those stay manually tested, same limitation the backend's own README calls out for its test suite.
 
 ## License
 

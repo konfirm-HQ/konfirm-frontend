@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit -p .
+
+      # BACKEND_URL isn't needed for the build itself — next.config.ts's
+      # rewrites() only reads it at request time, not build time — but
+      # setting it keeps the env consistent with how this app actually runs.
+      - name: Build
+        run: npm run build
+        env:
+          BACKEND_URL: http://localhost:4001
+
+      # A high-severity finding fails the build; moderate findings are
+      # visible in the log without blocking every push on them.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high

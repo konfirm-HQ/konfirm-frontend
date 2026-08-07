@@ -1,0 +1,255 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import freighterApi from "@stellar/freighter-api";
+import { API_BASE } from "@/lib/api";
+
+const HORIZON_URL = "https://horizon-testnet.stellar.org";
+type Currency = "XLM" | "USDC";
+type View = "form" | "progress" | "success";
+
+const STATUS_COPY: Record<string, [string, string]> = {
+  incomplete: ["Waiting for you to finish the form…", "Complete the details in the popup window."],
+  pending_user_transfer_start: ["Confirm the transfer in your wallet…", ""],
+  pending_anchor: ["Your cash-out is processing…", "The partner is handling the transfer."],
+  pending_external: ["Your cash-out is processing…", "The partner is handling the transfer."],
+  pending_stellar: ["Sending your cash-out…", ""],
+  pending_user: ["Action needed…", "Check the popup window for a next step."],
+  on_hold: ["Your cash-out is on hold…", "The partner may need more information."],
+};
+
+function friendlyMessage(err: unknown): string {
+  const msg = String((err as Error)?.message || err || "");
+  if (msg.toLowerCase().includes("freighter") || msg.toLowerCase().includes("wallet")) {
+    return "We couldn't connect to your wallet. Make sure Freighter is installed and unlocked, then try again.";
+  }
+  if (msg.toLowerCase().includes("declined") || msg.toLowerCase().includes("rejected")) {
+    return "You'll need to approve the signature in your wallet to continue.";
+  }
+  return "Something didn't go through with the cash-out partner. Please try again.";
+}
+
+export default function CashoutPage() {
+  const router = useRouter();
+  const [currency, setCurrency] = useState<Currency>("XLM");
+  const [view, setView] = useState<View>("form");
+  const [status, setStatus] = useState("");
+  const [stage, setStage] = useState("");
+  const [hint, setHint] = useState("");
+  const [starting, setStarting] = useState(false);
+
+  const merchantAddress = useRef<string | null>(null);
+  const cancelled = useRef(false);
+  const paymentSubmitted = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
+      if (!res.ok) {
+        router.push("/login");
+        return;
+      }
+      const { merchant } = await res.json();
+      if (!merchant.stellar_base_address) {
+        setStatus("Add a Stellar address to your account before cashing out.");
+        return;
+      }
+      merchantAddress.current = merchant.stellar_base_address;
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function showProgress(s: string, h = "") {
+    setView("progress");
+    setStage(s);
+    setHint(h);
+  }
+
+  function showFormError(msg: string) {
+    setView("form");
+    setStatus(msg);
+    setStarting(false);
+  }
+
+  async function sendWithdrawalPayment(token: string, id: string) {
+    showProgress("Preparing the transfer…");
+    const prepRes = await fetch(`${API_BASE}/withdrawals/prepare-payment`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currency, token, id }),
+    });
+    const prep = await prepRes.json();
+    if (!prepRes.ok) throw new Error(prep.message || "could not prepare the transfer");
+
+    showProgress("Approve the transfer in your wallet…");
+    const signed = await freighterApi.signTransaction(prep.xdr, {
+      networkPassphrase: prep.network_passphrase,
+      address: merchantAddress.current!,
+    });
+    if (signed.error) throw new Error(signed.error);
+
+    showProgress("Sending your cash-out…");
+    const submitRes = await fetch(`${HORIZON_URL}/transactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `tx=${encodeURIComponent(signed.signedTxXdr)}`,
+    });
+    const submitResult = await submitRes.json();
+    if (!submitRes.ok) {
+      const codes = submitResult.extras?.result_codes;
+      throw new Error(codes ? JSON.stringify(codes) : submitResult.title || "submission failed");
+    }
+  }
+
+  async function pollStatus(token: string, id: string) {
+    while (!cancelled.current) {
+      const res = await fetch(`${API_BASE}/withdrawals/status?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`);
+      const txn = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showFormError(friendlyMessage(new Error(txn.message)));
+        return;
+      }
+
+      if (txn.status === "completed") {
+        setView("success");
+        return;
+      }
+      if (["error", "expired", "refunded"].includes(txn.status)) {
+        showFormError("The cash-out partner could not complete this one. Please try again.");
+        return;
+      }
+
+      if (txn.status === "pending_user_transfer_start" && !paymentSubmitted.current) {
+        paymentSubmitted.current = true;
+        try {
+          await sendWithdrawalPayment(token, id);
+        } catch (err) {
+          console.error("[konfirm cashout] withdrawal payment failed", err);
+          showFormError(friendlyMessage(err));
+          return;
+        }
+      }
+
+      const copy = STATUS_COPY[txn.status] ?? ["Working on it…", ""];
+      showProgress(copy[0], copy[1]);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+
+  async function handleStart() {
+    setStarting(true);
+    paymentSubmitted.current = false;
+    cancelled.current = false;
+    try {
+      setStatus("Connecting your wallet…");
+      const access = await freighterApi.requestAccess();
+      if (access.error) throw new Error(access.error);
+
+      showProgress("Requesting a secure sign-in…");
+      const challengeRes = await fetch(`${API_BASE}/withdrawals/challenge`, { credentials: "include" });
+      const challenge = await challengeRes.json();
+      if (!challengeRes.ok) throw new Error(challenge.message || "could not reach the cash-out partner");
+
+      showProgress("Approve the sign-in in your wallet…");
+      const signedChallenge = await freighterApi.signTransaction(challenge.transaction, {
+        networkPassphrase: challenge.network_passphrase,
+        address: merchantAddress.current!,
+      });
+      if (signedChallenge.error) throw new Error(signedChallenge.error);
+
+      const tokenRes = await fetch(`${API_BASE}/withdrawals/token`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction: signedChallenge.signedTxXdr }),
+      });
+      const tokenBody = await tokenRes.json();
+      if (!tokenRes.ok) throw new Error(tokenBody.message || "the cash-out partner rejected that signature");
+
+      showProgress("Opening the cash-out form…");
+      const startRes = await fetch(`${API_BASE}/withdrawals/start`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currency, token: tokenBody.token }),
+      });
+      const startBody = await startRes.json();
+      if (!startRes.ok) throw new Error(startBody.message || "could not start a cash-out");
+
+      window.open(startBody.url, "konfirm-cashout", "width=460,height=700");
+      pollStatus(tokenBody.token, startBody.id);
+    } catch (err) {
+      console.error("[konfirm cashout]", err);
+      showFormError(friendlyMessage(err));
+    }
+  }
+
+  function handleAnother() {
+    setView("form");
+    setStarting(false);
+    setStatus("");
+  }
+
+  return (
+    <div className="page-center">
+      <div className="card">
+        <div className="top">
+          <div className="brand">
+            <span className="mark">✓</span> Konfirm
+          </div>
+          <Link className="back" href="/activity">
+            ← Activity
+          </Link>
+        </div>
+
+        {view === "form" && (
+          <div>
+            <h1>Cash out</h1>
+            <p className="sub">Move funds from your Stellar wallet to a bank account through a Stellar anchor partner.</p>
+
+            <div className="currency-toggle">
+              {(["XLM", "USDC"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`ctoggle${currency === c ? " active" : ""}`}
+                  onClick={() => setCurrency(c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="limit-note">This test partner accepts between 1–10 units per cash-out.</div>
+
+            <button type="button" className="primary" disabled={starting} onClick={handleStart}>
+              Connect wallet &amp; start cash-out
+            </button>
+            <div className={`status${status ? " error" : ""}`}>{status}</div>
+          </div>
+        )}
+
+        {view === "progress" && (
+          <div className="progress">
+            <div className="spin" />
+            <div className="stage">{stage}</div>
+            <div className="hint">{hint}</div>
+          </div>
+        )}
+
+        {view === "success" && (
+          <div className="success-box">
+            <div className="tick">✓</div>
+            <div className="success-title">Cash-out complete</div>
+            <div className="success-detail">Your funds are on their way to your bank.</div>
+            <button type="button" className="secondary" onClick={handleAnother}>
+              Start another cash-out
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

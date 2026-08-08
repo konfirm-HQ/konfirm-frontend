@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { API_BASE } from "@/lib/api";
+
+const NAV_ITEMS = [
+  { href: "/admin", label: "Overview" },
+  { href: "/admin/merchants", label: "Merchants" },
+];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -43,19 +49,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!resolved) return null;
 
   return (
-    <div className="admin-wrap">
-      <div className="header-row">
+    <div className="admin-shell">
+      <aside className="admin-sidebar">
         <div className="brand">
           <span className="mark">✓</span> Konfirm Admin
         </div>
-        <div className="nav">
-          {adminName && <span className="hint">{adminName}</span>}
+        <nav className="admin-sidebar-nav">
+          {NAV_ITEMS.map((item) => (
+            <Link key={item.href} href={item.href} className={pathname === item.href ? "active" : ""}>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="admin-sidebar-footer">
+          {adminName && <div className="hint">{adminName}</div>}
           <button type="button" onClick={handleLogout}>
             Log out
           </button>
         </div>
-      </div>
-      {children}
+      </aside>
+      <main className="admin-main">{children}</main>
     </div>
   );
 }

@@ -3,14 +3,10 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/api";
 
-interface Merchant {
-  id: string;
-  email: string;
-  name: string;
-  status: "pending" | "active" | "suspended";
-  risk_tier: string;
-  stellar_base_address: string | null;
-  created_at: string;
+interface Stats {
+  merchants: { total: number; active: number; suspended: number; pending: number };
+  payments: { today_count: number; today_net_usdc: string; last_7d_net_usdc: string };
+  daily_volume: { date: string; net_usdc: string }[];
 }
 
 interface ActivityEntry {
@@ -27,114 +23,101 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-function shortAddress(address: string | null): string {
-  if (!address) return "—";
-  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+function formatUsd(value: string): string {
+  return `$${Number(value).toFixed(2)}`;
 }
 
-export default function AdminDashboardPage() {
-  const [merchants, setMerchants] = useState<Merchant[]>([]);
+function dayLabel(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "short" });
+}
+
+// A small hand-rolled SVG area chart — this app has no charting dependency,
+// and one 7-point series doesn't need one. Real values in, real path out;
+// nothing here is decorative.
+function VolumeChart({ points }: { points: { date: string; net_usdc: string }[] }) {
+  const width = 640;
+  const height = 160;
+  const padding = 8;
+  const values = points.map((p) => Number(p.net_usdc));
+  const max = Math.max(...values, 1);
+  const step = (width - padding * 2) / (points.length - 1 || 1);
+
+  const coords = values.map((v, i) => {
+    const x = padding + i * step;
+    const y = height - padding - (v / max) * (height - padding * 2);
+    return [x, y];
+  });
+
+  const linePath = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`).join(" ");
+  const areaPath = `${linePath} L${coords[coords.length - 1][0]},${height} L${coords[0][0]},${height} Z`;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="volume-chart" preserveAspectRatio="none">
+      <path d={areaPath} className="volume-chart-fill" />
+      <path d={linePath} className="volume-chart-line" />
+      {coords.map(([x, y], i) => (
+        <circle key={points[i].date} cx={x} cy={y} r={3} className="volume-chart-dot" />
+      ))}
+    </svg>
+  );
+}
+
+export default function AdminOverviewPage() {
+  const [stats, setStats] = useState<Stats | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-
-  async function load() {
-    const [merchantsRes, activityRes] = await Promise.all([
-      fetch(`${API_BASE}/admin/merchants`, { credentials: "include" }),
-      fetch(`${API_BASE}/admin/activity`, { credentials: "include" }),
-    ]);
-    if (merchantsRes.ok) setMerchants(await merchantsRes.json());
-    if (activityRes.ok) setActivity(await activityRes.json());
-    setLoading(false);
-  }
 
   useEffect(() => {
     (async () => {
-      await load();
+      const [statsRes, activityRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/stats`, { credentials: "include" }),
+        fetch(`${API_BASE}/admin/activity`, { credentials: "include" }),
+      ]);
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (activityRes.ok) setActivity(await activityRes.json());
+      setLoading(false);
     })();
   }, []);
 
-  async function toggleStatus(merchant: Merchant) {
-    const nextStatus = merchant.status === "suspended" ? "active" : "suspended";
-    const verb = nextStatus === "suspended" ? "suspend" : "reactivate";
-    if (!window.confirm(`${verb === "suspend" ? "Suspend" : "Reactivate"} ${merchant.name} (${merchant.email})?`)) return;
-
-    let reason: string | null = "";
-    if (verb === "suspend") {
-      reason = window.prompt("Reason (optional, shown in the activity log):", "");
-      if (reason === null) return;
-    }
-
-    setPendingId(merchant.id);
-    setError("");
-    try {
-      const res = await fetch(`${API_BASE}/admin/merchants/${merchant.id}/status`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, reason: reason || undefined }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Could not ${verb} this merchant.`);
-      }
-      await load();
-    } catch (err) {
-      console.error("[konfirm admin] status change failed", err);
-      setError(err instanceof Error ? err.message : `Could not ${verb} this merchant.`);
-    } finally {
-      setPendingId(null);
-    }
-  }
+  if (loading) return <div className="empty">Loading…</div>;
+  if (!stats) return <div className="empty">Could not load stats.</div>;
 
   return (
     <div>
-      <h1>Merchants</h1>
+      <h1>Overview</h1>
 
       <div className="admin-section">
-        {loading ? (
-          <div className="empty">Loading…</div>
-        ) : merchants.length === 0 ? (
-          <div className="empty">No merchants yet.</div>
-        ) : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Merchant</th>
-                  <th>Status</th>
-                  <th>Risk tier</th>
-                  <th>Stellar address</th>
-                  <th>Created</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {merchants.map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      <div style={{ color: "var(--text-hi)" }}>{m.name}</div>
-                      <div className="mono">{m.email}</div>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${m.status}`}>{m.status}</span>
-                    </td>
-                    <td>{m.risk_tier}</td>
-                    <td className="mono">{shortAddress(m.stellar_base_address)}</td>
-                    <td>{formatDate(m.created_at)}</td>
-                    <td>
-                      <button type="button" disabled={pendingId === m.id} onClick={() => toggleStatus(m)}>
-                        {m.status === "suspended" ? "Reactivate" : "Suspend"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-label">Merchants</div>
+            <div className="stat-value">{stats.merchants.total}</div>
           </div>
-        )}
-        {error && <div className="status error">{error}</div>}
+          <div className="stat-card">
+            <div className="stat-label">Active</div>
+            <div className="stat-value stat-good">{stats.merchants.active}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Suspended</div>
+            <div className="stat-value stat-bad">{stats.merchants.suspended}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Payments today</div>
+            <div className="stat-value">{stats.payments.today_count}</div>
+            <div className="stat-sub">{formatUsd(stats.payments.today_net_usdc)} net</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-section">
+        <h2>Payment volume, last 7 days ({formatUsd(stats.payments.last_7d_net_usdc)} total)</h2>
+        <div className="chart-card">
+          <VolumeChart points={stats.daily_volume} />
+          <div className="chart-labels">
+            {stats.daily_volume.map((p) => (
+              <span key={p.date}>{dayLabel(p.date)}</span>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="admin-section">

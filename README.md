@@ -18,14 +18,17 @@ Sibling repos: [konfirm-backend](https://github.com/samuel2926i39-art/konfirm-ba
 
 ### Admin
 
-A separate, admin-only section — a fully distinct identity from merchant auth (own login, own session cookie), not a page any merchant can reach.
+A separate, admin-only section — a fully distinct identity from merchant auth (own login, own session cookie), not a page any merchant can reach. A sidebar shell (`src/app/admin/layout.tsx`) rather than the single-card/top-nav pattern everywhere else, since this section has more than one destination.
 
 | Route | File | Purpose |
 |---|---|---|
 | `/admin/login` | `src/app/admin/login/page.tsx` | Admin login — a different form posting to a different backend auth system entirely |
-| `/admin` | `src/app/admin/page.tsx`, guarded by `src/app/admin/layout.tsx` | Merchant list, suspend/reactivate, and the resulting audit trail — Slice 1 of the admin workflow. Payment review, a compliance blocklist, reconciler status, and withdrawal-attempt tracking are a deliberately deferred second slice, not built speculatively alongside this one |
+| `/admin` | `src/app/admin/page.tsx` | Overview — stat cards (merchant counts, today's payments) and a 7-day volume chart, all backed by real `GET /admin/stats` aggregates, plus the recent-activity feed |
+| `/admin/merchants` | `src/app/admin/merchants/page.tsx` | Merchant list, suspend/reactivate |
 
-`admin/layout.tsx` is the first nested layout in this app — it centralizes the auth-check-on-mount + nav pattern that every other page still duplicates inline, since it's the first section where more than one page genuinely shares it.
+Both pages are guarded by the shared `admin/layout.tsx` — the first nested layout in this app, since this is the first section where the auth-check-on-mount + nav pattern is genuinely shared across more than one page instead of duplicated inline like everywhere else today. The Overview chart is a small hand-rolled SVG area chart, not a charting library — this app has no charting dependency, and one 7-point series doesn't need one.
+
+This is Slice 1 of the admin workflow. Payment review, a compliance blocklist, reconciler status, and withdrawal-attempt tracking are a deliberately deferred second slice, not built speculatively alongside this one.
 
 ## Tech stack
 

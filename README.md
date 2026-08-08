@@ -53,7 +53,7 @@ Dark by design, not by default — one shared token set (`--ink`, `--surface`, `
 
 ## CI
 
-`.github/workflows/ci.yml` — install, lint, typecheck, `next build`, `npm audit --audit-level=high`. No database or backend dependency to stand up, since none of these checks make a real network call.
+`.github/workflows/ci.yml` — install, lint, `next build` (which runs its own full TypeScript check — a standalone `tsc --noEmit` step run first fails on a clean checkout, since App Router's generated route types don't exist until a build has run at least once), `npm audit --audit-level=high`. No database or backend dependency to stand up, since none of these checks make a real network call.
 
 ## Known limitations
 

@@ -16,6 +16,17 @@ Sibling repos: [konfirm-backend](https://github.com/samuel2926i39-art/konfirm-ba
 | `/cashout` | `src/app/cashout/page.tsx` | Fiat off-ramp — real SEP-10/SEP-24 flow against Stellar's reference anchor |
 | `/get-test-usdc` | `src/app/get-test-usdc/page.tsx` | Pulls test USDC from the reference anchor via Freighter, then forwards it to whatever wallet you're actually testing checkout with — not part of the merchant product |
 
+### Admin
+
+A separate, admin-only section — a fully distinct identity from merchant auth (own login, own session cookie), not a page any merchant can reach.
+
+| Route | File | Purpose |
+|---|---|---|
+| `/admin/login` | `src/app/admin/login/page.tsx` | Admin login — a different form posting to a different backend auth system entirely |
+| `/admin` | `src/app/admin/page.tsx`, guarded by `src/app/admin/layout.tsx` | Merchant list, suspend/reactivate, and the resulting audit trail — Slice 1 of the admin workflow. Payment review, a compliance blocklist, reconciler status, and withdrawal-attempt tracking are a deliberately deferred second slice, not built speculatively alongside this one |
+
+`admin/layout.tsx` is the first nested layout in this app — it centralizes the auth-check-on-mount + nav pattern that every other page still duplicates inline, since it's the first section where more than one page genuinely shares it.
+
 ## Tech stack
 
 - **Next.js 16** (App Router, Turbopack), **React 19**, TypeScript

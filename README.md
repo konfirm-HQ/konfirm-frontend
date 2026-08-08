@@ -23,12 +23,14 @@ A separate, admin-only section — a fully distinct identity from merchant auth 
 | Route | File | Purpose |
 |---|---|---|
 | `/admin/login` | `src/app/admin/login/page.tsx` | Admin login — a different form posting to a different backend auth system entirely |
-| `/admin` | `src/app/admin/page.tsx` | Overview — stat cards (merchant counts, today's payments) and a 7-day volume chart, all backed by real `GET /admin/stats` aggregates, plus the recent-activity feed |
+| `/admin` | `src/app/admin/page.tsx` | Overview — stat cards (merchant counts, today's payments, blocked addresses, open cash-outs, reconciler staleness) and a 7-day volume chart, all backed by real `GET /admin/stats` aggregates, plus the recent-activity feed |
 | `/admin/merchants` | `src/app/admin/merchants/page.tsx` | Merchant list, suspend/reactivate |
+| `/admin/payments` | `src/app/admin/payments/page.tsx` | All payments across every merchant, filterable by status, with a paid/held/disputed control per row |
+| `/admin/compliance` | `src/app/admin/compliance/page.tsx` | The address blocklist — block/unblock, with the SEP-7/QR coverage gap stated on the page itself, not just in a README |
+| `/admin/reconciler` | `src/app/admin/reconciler/page.tsx` | Cursor status + a rewind form that mirrors the backend's own backward-only guard client-side, so a forward jump is caught before the request round-trips. A `window.confirm` pointing at `docs/RUNBOOK.md` gates every submit — this is a rare, deliberately manual operation, not a routine control, and the UI doesn't pretend otherwise |
+| `/admin/withdrawals` | `src/app/admin/withdrawals/page.tsx` | Cash-out visibility only — a manual refresh re-polls the anchor for anything not yet finished; there's no admin action here beyond looking, because Konfirm has no authority over the anchor's own transaction state |
 
-Both pages are guarded by the shared `admin/layout.tsx` — the first nested layout in this app, since this is the first section where the auth-check-on-mount + nav pattern is genuinely shared across more than one page instead of duplicated inline like everywhere else today. The Overview chart is a small hand-rolled SVG area chart, not a charting library — this app has no charting dependency, and one 7-point series doesn't need one.
-
-This is Slice 1 of the admin workflow. Payment review, a compliance blocklist, reconciler status, and withdrawal-attempt tracking are a deliberately deferred second slice, not built speculatively alongside this one.
+All six pages are guarded by the shared `admin/layout.tsx` — the first nested layout in this app, since this is the first section where the auth-check-on-mount + nav pattern is genuinely shared across more than one page instead of duplicated inline like everywhere else today. The Overview chart is a small hand-rolled SVG area chart, not a charting library — this app has no charting dependency, and one 7-point series doesn't need one.
 
 ## Tech stack
 

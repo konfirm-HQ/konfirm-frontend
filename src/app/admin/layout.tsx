@@ -8,6 +8,10 @@ import { API_BASE } from "@/lib/api";
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/merchants", label: "Merchants" },
+  { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/compliance", label: "Compliance" },
+  { href: "/admin/reconciler", label: "Reconciler" },
+  { href: "/admin/withdrawals", label: "Withdrawals" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

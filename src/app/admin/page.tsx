@@ -7,6 +7,9 @@ interface Stats {
   merchants: { total: number; active: number; suspended: number; pending: number };
   payments: { today_count: number; today_net_usdc: string; last_7d_net_usdc: string };
   daily_volume: { date: string; net_usdc: string }[];
+  compliance: { blocked_count: number };
+  reconciler: { cursor: string | null; updated_at: string | null };
+  withdrawals: { open_count: number };
 }
 
 interface ActivityEntry {
@@ -104,6 +107,21 @@ export default function AdminOverviewPage() {
             <div className="stat-label">Payments today</div>
             <div className="stat-value">{stats.payments.today_count}</div>
             <div className="stat-sub">{formatUsd(stats.payments.today_net_usdc)} net</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Blocked addresses</div>
+            <div className="stat-value">{stats.compliance.blocked_count}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Open cash-outs</div>
+            <div className="stat-value">{stats.withdrawals.open_count}</div>
+            <div className="stat-sub">not yet completed/errored per the anchor</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Reconciler last moved</div>
+            <div className="stat-value" style={{ fontSize: 15 }}>
+              {stats.reconciler.updated_at ? formatDate(stats.reconciler.updated_at) : "—"}
+            </div>
           </div>
         </div>
       </div>

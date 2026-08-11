@@ -71,6 +71,12 @@ Dark by design, not by default — one shared token set (`--ink`, `--surface`, `
 
 `.github/workflows/ci.yml` — install, lint, `next build` (which runs its own full TypeScript check — a standalone `tsc --noEmit` step run first fails on a clean checkout, since App Router's generated route types don't exist until a build has run at least once), `npm audit --audit-level=high`. No database or backend dependency to stand up, since none of these checks make a real network call.
 
+## Deployment
+
+[Vercel](https://vercel.com) — its native Next.js build already matches what CI validates (`next build`), so no Dockerfile or platform-specific config is needed here, unlike `konfirm-backend`.
+
+Set `BACKEND_URL` in the Vercel project's environment variables to the deployed backend's real public URL (see `konfirm-backend`'s README, Deployment section) — without it, the BFF proxy defaults to `http://localhost:4001` and every `/api/backend/*` call fails in production. See `.env.example` for the exact variable.
+
 ## Known limitations
 
 - **Testnet only** — same as the backend; nothing here changes for mainnet beyond whatever `BACKEND_URL` points at in production.

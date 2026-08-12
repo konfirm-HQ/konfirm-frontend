@@ -1,0 +1,35 @@
+{
+  "bazaarVersion": "0.1",
+  "description": "v1-minimal static discovery manifest — a machine-readable listing, not a registry service. No database, no auth, no search API behind this file; a real registry (third-party publishing, search, freshness checks) is named roadmap, not a silently narrower scope pretending to be complete.",
+  "generatedAt": "2026-08-12T00:00:00Z",
+  "facilitators": [
+    {
+      "name": "Konfirm x402 Facilitator",
+      "description": "A compliance-aware x402 facilitator for the Stellar `exact` scheme: standard Soroban auth-entry verification and settlement (via the official @x402/stellar reference implementation), plus Konfirm's own local-blocklist + on-chain compliance check on every verify/settle call — the same check already protecting Konfirm's Freighter checkout and SEP-7/QR payment paths.",
+      "verifyUrl": "https://api-production-cc675.up.railway.app/x402/verify",
+      "settleUrl": "https://api-production-cc675.up.railway.app/x402/settle",
+      "supportedKinds": [
+        {
+          "x402Version": 2,
+          "scheme": "exact",
+          "network": "stellar:testnet",
+          "extra": { "areFeesSponsored": true }
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "url": "http://localhost:4021/paid-resource",
+      "description": "Local example paid resource used to verify this facilitator end-to-end (see scripts/x402-harness/resource-server.js). Not a hosted, always-on resource — a proof harness, listed here so the manifest schema has one real, runnable entry rather than a hypothetical one.",
+      "network": "stellar:testnet",
+      "scheme": "exact"
+    }
+  ],
+  "roadmap": [
+    "Real registry backing this manifest (database-backed, not a static file)",
+    "Third-party resource-server publishing (submission + review flow)",
+    "Search / filtering across listed resources",
+    "Mainnet network + additional assets beyond USDC"
+  ]
+}

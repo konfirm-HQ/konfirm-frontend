@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/admin/compliance", label: "Compliance" },
   { href: "/admin/reconciler", label: "Reconciler" },
   { href: "/admin/withdrawals", label: "Withdrawals" },
+  { href: "/admin/x402-settlements", label: "x402 Settlements" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

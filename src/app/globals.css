@@ -863,14 +863,16 @@ a.txlink {
   color: var(--error);
 }
 .status-pill.paid,
-.status-pill.completed {
+.status-pill.completed,
+.status-pill.settled {
   background: rgba(58, 156, 125, 0.15);
   color: var(--success);
 }
 .status-pill.disputed,
 .status-pill.error,
 .status-pill.expired,
-.status-pill.refunded {
+.status-pill.refunded,
+.status-pill.failed {
   background: rgba(217, 112, 74, 0.15);
   color: var(--error);
 }

@@ -40,6 +40,10 @@ const NAV_GROUPS = [
       { href: "/admin/notifications", label: "Notifications" },
     ],
   },
+  {
+    label: "Growth",
+    items: [{ href: "/admin/referrals", label: "Referrals" }],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

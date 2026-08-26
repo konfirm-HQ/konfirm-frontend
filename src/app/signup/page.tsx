@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { API_BASE } from "@/lib/api";
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Present only when someone arrived via another merchant's referral
+  // link (see /referrals) — an invalid/expired code is rejected silently
+  // server-side, not surfaced as an error here, since it should never
+  // block signing up.
+  const referralCode = searchParams.get("ref");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,7 +29,13 @@ export default function SignupPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, stellar_base_address: address.trim() }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          stellar_base_address: address.trim(),
+          ...(referralCode ? { referral_code: referralCode } : {}),
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -46,6 +58,11 @@ export default function SignupPage() {
           <span className="mark">✓</span> Konfirm
         </div>
         <h1 style={{ marginBottom: 22 }}>Create your account</h1>
+        {referralCode && (
+          <div className="status" style={{ marginBottom: 16, background: "var(--surface)", padding: "10px 14px", borderRadius: 8 }}>
+            You were referred by another merchant — this is credited automatically, nothing else to do.
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="name">Business name</label>
@@ -104,5 +121,15 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary in the app router — same
+// pattern already used in src/app/activity/page.tsx for the same reason.
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

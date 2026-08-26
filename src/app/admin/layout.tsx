@@ -5,14 +5,36 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE } from "@/lib/api";
 
-const NAV_ITEMS = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/merchants", label: "Merchants" },
-  { href: "/admin/payments", label: "Payments" },
-  { href: "/admin/compliance", label: "Compliance" },
-  { href: "/admin/reconciler", label: "Reconciler" },
-  { href: "/admin/withdrawals", label: "Withdrawals" },
-  { href: "/admin/x402-settlements", label: "x402 Settlements" },
+const NAV_GROUPS = [
+  {
+    label: "Platform",
+    items: [
+      { href: "/admin", label: "Overview" },
+      { href: "/admin/merchants", label: "Merchants" },
+      { href: "/admin/users", label: "Users" },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { href: "/admin/payments", label: "Payments" },
+      { href: "/admin/fee-revenue", label: "Fee Revenue" },
+      { href: "/admin/pay-links", label: "Pay Links" },
+      { href: "/admin/x402-settlements", label: "x402 Settlements" },
+      { href: "/admin/withdrawals", label: "Withdrawals" },
+    ],
+  },
+  {
+    label: "Infrastructure",
+    items: [
+      { href: "/admin/compliance", label: "Compliance" },
+      { href: "/admin/reconciler", label: "Reconciler" },
+      { href: "/admin/blockchain", label: "Blockchain" },
+      { href: "/admin/wallets", label: "Wallets" },
+      { href: "/admin/treasury", label: "Treasury" },
+      { href: "/admin/notifications", label: "Notifications" },
+    ],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -60,10 +82,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span className="mark">✓</span> Konfirm Admin
         </div>
         <nav className="admin-sidebar-nav">
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} className={pathname === item.href ? "active" : ""}>
-              {item.label}
-            </Link>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="admin-sidebar-group">
+              <div className="admin-sidebar-group-label">{group.label}</div>
+              {group.items.map((item) => (
+                <Link key={item.href} href={item.href} className={pathname === item.href ? "active" : ""}>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="admin-sidebar-footer">

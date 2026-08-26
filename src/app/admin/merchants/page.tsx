@@ -3,15 +3,19 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/api";
 
+type RiskTier = "unverified" | "standard" | "established" | "enterprise";
+
 interface Merchant {
   id: string;
   email: string;
   name: string;
   status: "pending" | "active" | "suspended";
-  risk_tier: string;
+  risk_tier: RiskTier;
   stellar_base_address: string | null;
   created_at: string;
 }
+
+const RISK_TIERS: RiskTier[] = ["unverified", "standard", "established", "enterprise"];
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
@@ -73,6 +77,40 @@ export default function AdminMerchantsPage() {
     }
   }
 
+  async function changeTier(merchant: Merchant, riskTier: RiskTier) {
+    if (riskTier === merchant.risk_tier) return;
+    // This changes what tier a merchant is TREATED as, not their actual
+    // verification status — there's no identity/KYC check behind this yet,
+    // so the confirm copy says so rather than implying otherwise.
+    if (
+      !window.confirm(
+        `Set ${merchant.name} (${merchant.email}) to "${riskTier}"?\n\nThis only changes which tier they're treated as — it does not perform any identity verification.`,
+      )
+    )
+      return;
+
+    setPendingId(merchant.id);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/admin/merchants/${merchant.id}/tier`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ risk_tier: riskTier }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Could not change this merchant's tier.");
+      }
+      await load();
+    } catch (err) {
+      console.error("[konfirm admin] tier change failed", err);
+      setError(err instanceof Error ? err.message : "Could not change this merchant's tier.");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   return (
     <div>
       <h1>Merchants</h1>
@@ -105,7 +143,19 @@ export default function AdminMerchantsPage() {
                     <td>
                       <span className={`status-pill ${m.status}`}>{m.status}</span>
                     </td>
-                    <td>{m.risk_tier}</td>
+                    <td>
+                      <select
+                        value={m.risk_tier}
+                        disabled={pendingId === m.id}
+                        onChange={(e) => changeTier(m, e.target.value as RiskTier)}
+                      >
+                        {RISK_TIERS.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="mono">{shortAddress(m.stellar_base_address)}</td>
                     <td>{formatDate(m.created_at)}</td>
                     <td>

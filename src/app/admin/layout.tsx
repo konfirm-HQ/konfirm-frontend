@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { API_BASE } from "@/lib/api";
+import { apiPost } from "@/lib/api";
+import { useRequireAuth } from "@/lib/useAuth";
+
+interface Admin {
+  name: string;
+}
 
 const NAV_GROUPS = [
   {
@@ -19,6 +23,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admin/payments", label: "Payments" },
       { href: "/admin/fee-revenue", label: "Fee Revenue" },
+      { href: "/admin/exchange-rate", label: "Exchange Rate" },
       { href: "/admin/pay-links", label: "Pay Links" },
       { href: "/admin/x402-settlements", label: "x402 Settlements" },
       { href: "/admin/withdrawals", label: "Withdrawals" },
@@ -42,33 +47,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const isLoginPage = pathname === "/admin/login";
 
-  const [adminName, setAdminName] = useState<string | null>(null);
-  // The login page itself never needs the check below — running it there
-  // too would just redirect straight back to itself.
-  const [resolved, setResolved] = useState(isLoginPage);
-
-  useEffect(() => {
-    if (isLoginPage) return;
-    let cancelled = false;
-    (async () => {
-      const res = await fetch(`${API_BASE}/admin/auth/me`, { credentials: "include" });
-      if (cancelled) return;
-      if (!res.ok) {
-        router.push("/admin/login");
-        return;
-      }
-      const { admin } = await res.json();
-      setAdminName(admin.name);
-      setResolved(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoginPage]);
+  // The login page itself never needs this check — running it there too
+  // would just redirect straight back to itself.
+  const { resolved, data: admin } = useRequireAuth<Admin>({
+    meEndpoint: "/admin/auth/me",
+    loginPath: "/admin/login",
+    skip: isLoginPage,
+    select: (body) => (body as { admin: Admin }).admin,
+  });
 
   async function handleLogout() {
-    await fetch(`${API_BASE}/admin/auth/logout`, { method: "POST", credentials: "include" });
+    await apiPost("/admin/auth/logout");
     router.push("/admin/login");
   }
 
@@ -94,7 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
         <div className="admin-sidebar-footer">
-          {adminName && <div className="hint">{adminName}</div>}
+          {admin && <div className="hint">{admin.name}</div>}
           <button type="button" onClick={handleLogout}>
             Log out
           </button>

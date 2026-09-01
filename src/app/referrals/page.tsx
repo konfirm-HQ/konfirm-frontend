@@ -15,13 +15,44 @@ interface ReferralRow {
   activated: boolean;
 }
 
+interface Promo {
+  active: boolean;
+  feeBps: number | null;
+  expiresAt: string | null;
+  volumeCapUsdc: string | null;
+  volumeSoFarUsdc: string;
+}
+
 interface ReferralsResponse {
   code: string | null;
+  promo: Promo | null;
   referrals: ReferralRow[];
 }
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
+}
+
+function daysLeft(iso: string): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+function PromoBanner({ promo }: { promo: Promo }) {
+  if (!promo.active) {
+    return <div className="admin-section hint">Your promotional rate has ended — standard fees now apply.</div>;
+  }
+  const isFree = promo.feeBps === 0;
+  const label = isFree ? "0% fees" : `${(promo.feeBps! / 100).toFixed(2)}% fees`;
+  return (
+    <div className="admin-section" style={{ borderColor: "var(--accent, #5b8def)" }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>{label} active{promo.expiresAt ? ` — ${daysLeft(promo.expiresAt)} days left` : ""}</div>
+      {promo.volumeCapUsdc && (
+        <div className="hint">
+          ${Number(promo.volumeSoFarUsdc).toFixed(2)} of ${Number(promo.volumeCapUsdc).toFixed(2)} processed at this rate
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ReferralsPage() {
@@ -61,6 +92,8 @@ export default function ReferralsPage() {
         <div className="empty">Loading…</div>
       ) : (
         <>
+          {data.promo && <PromoBanner promo={data.promo} />}
+
           <div className="admin-section">
             <p>Share your link. Anyone who signs up through it is automatically credited to you — no code to remember.</p>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

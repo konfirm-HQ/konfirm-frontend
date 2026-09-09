@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { API_BASE } from "@/lib/api";
+import { apiPost } from "@/lib/api";
+import { useRequireAuth } from "@/lib/useAuth";
 
 type Currency = "XLM" | "USDC";
 
+interface Merchant {
+  name: string;
+}
+
 export default function NewPaymentPage() {
   const router = useRouter();
-  const [merchantName, setMerchantName] = useState<string | null>(null);
+  const { data: merchant } = useRequireAuth<Merchant>({
+    meEndpoint: "/auth/me",
+    loginPath: "/login",
+    select: (body) => (body as { merchant: Merchant }).merchant,
+  });
   const [currency, setCurrency] = useState<Currency>("XLM");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -18,24 +27,6 @@ export default function NewPaymentPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [copyLabel, setCopyLabel] = useState("Copy");
   const [showResult, setShowResult] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
-      if (cancelled) return;
-      if (!res.ok) {
-        router.push("/login");
-        return;
-      }
-      const { merchant } = await res.json();
-      setMerchantName(merchant.name);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function handleSubmit() {
     const amountRaw = amount.trim();
@@ -49,26 +40,21 @@ export default function NewPaymentPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/links`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount_usdc: amountNum.toFixed(2),
-          currency,
-          description: description.trim() || undefined,
-        }),
+      const result = await apiPost<{ id: string }>("/links", {
+        amount_usdc: amountNum.toFixed(2),
+        currency,
+        description: description.trim() || undefined,
       });
-      const body = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        router.push("/login");
-        return;
-      }
-      if (!res.ok) {
-        throw new Error(typeof body.message === "string" ? body.message : "Could not create that payment link.");
+      if (!result.ok) {
+        if (result.status === 401) {
+          router.push("/login");
+          return;
+        }
+        const bodyMessage = (result.body as { message?: unknown } | null)?.message;
+        throw new Error(typeof bodyMessage === "string" ? bodyMessage : "Could not create that payment link.");
       }
 
-      setLinkUrl(`${window.location.origin}/pay/${body.id}`);
+      setLinkUrl(`${window.location.origin}/pay/${result.data.id}`);
       setShowResult(true);
     } catch (err) {
       console.error("[konfirm new-payment]", err);
@@ -106,7 +92,7 @@ export default function NewPaymentPage() {
           <div>
             <h1>Request a payment</h1>
             <p className="sub">
-              {merchantName ? `Create a link you can send anyone — from ${merchantName}.` : "Create a link you can send anyone."}
+              {merchant?.name ? `Create a link you can send anyone — from ${merchant.name}.` : "Create a link you can send anyone."}
             </p>
 
             <div className="amount-row">

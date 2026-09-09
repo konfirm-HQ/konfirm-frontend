@@ -3,7 +3,8 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, apiPost } from "@/lib/api";
+import { useRequireAuth } from "@/lib/useAuth";
 
 interface Payment {
   id: string;
@@ -11,6 +12,11 @@ interface Payment {
   asset_code: string;
   payer_address: string;
   link_description: string | null;
+}
+
+interface Merchant {
+  name: string;
+  stellar_base_address: string | null;
 }
 
 function formatAmount(amount: number, code: string): string {
@@ -22,40 +28,23 @@ function ActivityContent() {
   const searchParams = useSearchParams();
   const queryMerchant = searchParams.get("merchant");
 
-  const [merchantAddress, setMerchantAddress] = useState<string | null>(queryMerchant);
-  const [merchantName, setMerchantName] = useState<string | null>(null);
-  const [showNav, setShowNav] = useState(false);
+  // A ?merchant=G... in the URL still works (handy for support or a
+  // one-off check, and needs no auth check of its own), but the normal
+  // path is the logged-in session — no address to remember or paste.
+  const { resolved, data: merchant } = useRequireAuth<Merchant>({
+    meEndpoint: "/auth/me",
+    loginPath: "/login",
+    skip: Boolean(queryMerchant),
+    select: (body) => (body as { merchant: Merchant }).merchant,
+  });
+  // Derived, not its own state — it only ever mirrored one of these two
+  // sources, so there's nothing for a separate useState to get out of sync
+  // with. showNav mirrors the original's behavior exactly: false in the
+  // ?merchant= case, same as before (that path never set it true).
+  const merchantAddress = queryMerchant ?? merchant?.stellar_base_address ?? null;
+  const showNav = Boolean(merchant);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [pending, setPending] = useState(false);
-  // If ?merchant= was already in the URL there's nothing to resolve
-  // asynchronously — derived synchronously at init rather than set inside
-  // an effect body, which avoids an extra cascading render for that case.
-  const [resolved, setResolved] = useState(() => Boolean(queryMerchant));
-
-  // A ?merchant=G... in the URL still works (handy for support or a
-  // one-off check), but the normal path is the logged-in session — no
-  // address to remember or paste.
-  useEffect(() => {
-    if (queryMerchant) return;
-    let cancelled = false;
-    (async () => {
-      const res = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
-      if (cancelled) return;
-      if (!res.ok) {
-        router.push("/login");
-        return;
-      }
-      const { merchant } = await res.json();
-      setMerchantAddress(merchant.stellar_base_address);
-      setMerchantName(merchant.name);
-      setShowNav(true);
-      setResolved(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryMerchant]);
 
   const poll = useCallback(async () => {
     if (!merchantAddress) return;
@@ -90,7 +79,7 @@ function ActivityContent() {
   }, [resolved, poll]);
 
   async function handleLogout() {
-    await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
+    await apiPost("/auth/logout");
     router.push("/login");
   }
 
@@ -116,7 +105,7 @@ function ActivityContent() {
           </div>
         )}
       </div>
-      <h1>{merchantName ? `${merchantName}'s activity` : "Your activity"}</h1>
+      <h1>{merchant?.name ? `${merchant.name}'s activity` : "Your activity"}</h1>
       <p className="sub">Every payment below landed and was konfirmed on-chain — nothing here is an estimate.</p>
       <div className="live-dot">
         <span className="d" /> Watching for new payments

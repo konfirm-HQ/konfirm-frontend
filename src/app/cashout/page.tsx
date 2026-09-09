@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import freighterApi from "@stellar/freighter-api";
 import { API_BASE } from "@/lib/api";
+import { useRequireAuth } from "@/lib/useAuth";
 
 const HORIZON_URL = "https://horizon-testnet.stellar.org";
 type Currency = "XLM" | "USDC";
 type View = "form" | "progress" | "success";
+
+interface Merchant {
+  stellar_base_address: string | null;
+}
 
 const STATUS_COPY: Record<string, [string, string]> = {
   incomplete: ["Waiting for you to finish the form…", "Complete the details in the popup window."],
@@ -32,7 +36,11 @@ function friendlyMessage(err: unknown): string {
 }
 
 export default function CashoutPage() {
-  const router = useRouter();
+  const { data: merchant } = useRequireAuth<Merchant>({
+    meEndpoint: "/auth/me",
+    loginPath: "/login",
+    select: (body) => (body as { merchant: Merchant }).merchant,
+  });
   const [currency, setCurrency] = useState<Currency>("XLM");
   const [view, setView] = useState<View>("form");
   const [status, setStatus] = useState("");
@@ -44,22 +52,19 @@ export default function CashoutPage() {
   const cancelled = useRef(false);
   const paymentSubmitted = useRef(false);
 
+  // Ref mutation (not React state) in response to an external value
+  // arriving — the one part of the original effect that's genuinely
+  // syncing with an outside system, not deriving UI. The "no address on
+  // file" message below is computed at render time instead of via
+  // setState in this effect, which would otherwise trigger an avoidable
+  // cascading render.
   useEffect(() => {
-    (async () => {
-      const res = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
-      if (!res.ok) {
-        router.push("/login");
-        return;
-      }
-      const { merchant } = await res.json();
-      if (!merchant.stellar_base_address) {
-        setStatus("Add a Stellar address to your account before cashing out.");
-        return;
-      }
+    if (merchant?.stellar_base_address) {
       merchantAddress.current = merchant.stellar_base_address;
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    }
+  }, [merchant]);
+  const missingAddressStatus =
+    merchant && !merchant.stellar_base_address ? "Add a Stellar address to your account before cashing out." : "";
 
   function showProgress(s: string, h = "") {
     setView("progress");
@@ -227,7 +232,7 @@ export default function CashoutPage() {
             <button type="button" className="primary" disabled={starting} onClick={handleStart}>
               Connect wallet &amp; start cash-out
             </button>
-            <div className={`status${status ? " error" : ""}`}>{status}</div>
+            <div className={`status${status || missingAddressStatus ? " error" : ""}`}>{status || missingAddressStatus}</div>
           </div>
         )}
 

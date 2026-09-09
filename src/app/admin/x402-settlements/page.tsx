@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type SettlementStatus = "settled" | "failed" | "held";
 
@@ -39,19 +39,25 @@ export default function AdminX402SettlementsPage() {
   const [filter, setFilter] = useState<"" | SettlementStatus>("");
   const [loading, setLoading] = useState(true);
 
-  async function load(status: string) {
+  async function load() {
     setLoading(true);
-    const url = status ? `${API_BASE}/admin/x402-settlements?status=${status}` : `${API_BASE}/admin/x402-settlements`;
-    const res = await fetch(url, { credentials: "include" });
-    if (res.ok) setSettlements(await res.json());
+    const result = await apiFetch<Settlement[]>("/admin/x402-settlements");
+    if (result.ok) setSettlements(result.data);
     setLoading(false);
   }
 
   useEffect(() => {
     (async () => {
-      await load(filter);
+      await load();
     })();
-  }, [filter]);
+  }, []);
+
+  const counts = {
+    settled: settlements.filter((s) => s.status === "settled").length,
+    failed: settlements.filter((s) => s.status === "failed").length,
+    held: settlements.filter((s) => s.status === "held").length,
+  };
+  const visible = filter ? settlements.filter((s) => s.status === filter) : settlements;
 
   return (
     <div>
@@ -62,24 +68,42 @@ export default function AdminX402SettlementsPage() {
         compliance check — the same blocklist and on-chain check that already protect checkout and the reconciler.
       </p>
 
-      <div className="admin-inline-form">
-        <div className="field">
-          <label htmlFor="filter">Filter by status</label>
-          <select id="filter" value={filter} onChange={(e) => setFilter(e.target.value as "" | SettlementStatus)}>
-            <option value="">All</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+      <div className="admin-section">
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-label">Total</div>
+            <div className="stat-value">{settlements.length}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Settled</div>
+            <div className="stat-value stat-good">{counts.settled}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Failed</div>
+            <div className="stat-value stat-bad">{counts.failed}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Held (compliance)</div>
+            <div className="stat-value">{counts.held}</div>
+          </div>
         </div>
+      </div>
+
+      <div className="filter-pills">
+        <button type="button" className={`filter-pill ${filter === "" ? "active" : ""}`} onClick={() => setFilter("")}>
+          All
+        </button>
+        {STATUS_OPTIONS.map((s) => (
+          <button key={s} type="button" className={`filter-pill ${filter === s ? "active" : ""}`} onClick={() => setFilter(s)}>
+            {s}
+          </button>
+        ))}
       </div>
 
       <div className="admin-section">
         {loading ? (
           <div className="empty">Loading…</div>
-        ) : settlements.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="empty">No settlements match this filter.</div>
         ) : (
           <div className="admin-table-wrap">
@@ -95,7 +119,7 @@ export default function AdminX402SettlementsPage() {
                 </tr>
               </thead>
               <tbody>
-                {settlements.map((s) => (
+                {visible.map((s) => (
                   <tr key={s.id}>
                     <td className="mono">{shortAddress(s.payer_address)}</td>
                     <td className="mono">{shortAddress(s.pay_to)}</td>

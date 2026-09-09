@@ -665,8 +665,22 @@ a.txlink {
 .admin-sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 20px;
   flex: 1;
+}
+.admin-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-sidebar-group-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0 12px;
+  margin-bottom: 2px;
 }
 .admin-sidebar-nav a {
   padding: 10px 12px;
@@ -843,6 +857,34 @@ a.txlink {
 }
 .admin-table button:hover {
   border-color: var(--accent);
+}
+
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.filter-pill {
+  width: auto;
+  padding: 7px 16px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-lo);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.filter-pill:hover {
+  border-color: var(--accent);
+  color: var(--text-hi);
+}
+.filter-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .status-pill {

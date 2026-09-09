@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface WithdrawalAttempt {
   id: string;
@@ -14,6 +14,8 @@ interface WithdrawalAttempt {
   merchant_email: string;
 }
 
+const TERMINAL_STATUSES = new Set(["completed", "error", "expired", "refunded"]);
+
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : "—";
 }
@@ -25,8 +27,8 @@ export default function AdminWithdrawalsPage() {
 
   async function load(showSpinner: boolean) {
     if (showSpinner) setLoading(true);
-    const res = await fetch(`${API_BASE}/admin/withdrawal-attempts`, { credentials: "include" });
-    if (res.ok) setAttempts(await res.json());
+    const result = await apiFetch<WithdrawalAttempt[]>("/admin/withdrawal-attempts");
+    if (result.ok) setAttempts(result.data);
     setLoading(false);
   }
 
@@ -42,6 +44,10 @@ export default function AdminWithdrawalsPage() {
     setRefreshing(false);
   }
 
+  const openCount = attempts.filter((a) => !a.last_status || !TERMINAL_STATUSES.has(a.last_status)).length;
+  const completedCount = attempts.filter((a) => a.last_status === "completed").length;
+  const failedCount = attempts.filter((a) => a.last_status && ["error", "expired", "refunded"].includes(a.last_status)).length;
+
   return (
     <div>
       <h1>Withdrawals</h1>
@@ -50,6 +56,27 @@ export default function AdminWithdrawalsPage() {
         row reflects the anchor&apos;s last known status; refreshing re-polls anything not yet finished. There is no admin action here
         beyond visibility — Konfirm has no authority to change the anchor&apos;s own transaction state.
       </p>
+
+      <div className="admin-section">
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-label">Total</div>
+            <div className="stat-value">{attempts.length}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Open</div>
+            <div className="stat-value">{openCount}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Completed</div>
+            <div className="stat-value stat-good">{completedCount}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Failed</div>
+            <div className="stat-value stat-bad">{failedCount}</div>
+          </div>
+        </div>
+      </div>
 
       <div className="admin-section">
         <button type="button" onClick={handleRefresh} disabled={refreshing} style={{ width: "auto", marginBottom: 16 }}>

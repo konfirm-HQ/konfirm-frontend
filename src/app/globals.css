@@ -906,7 +906,8 @@ a.txlink {
 }
 .status-pill.paid,
 .status-pill.completed,
-.status-pill.settled {
+.status-pill.settled,
+.status-pill.approved {
   background: rgba(58, 156, 125, 0.15);
   color: var(--success);
 }
@@ -914,7 +915,8 @@ a.txlink {
 .status-pill.error,
 .status-pill.expired,
 .status-pill.refunded,
-.status-pill.failed {
+.status-pill.failed,
+.status-pill.rejected {
   background: rgba(217, 112, 74, 0.15);
   color: var(--error);
 }

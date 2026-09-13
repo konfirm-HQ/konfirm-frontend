@@ -37,12 +37,16 @@ const NAV_GROUPS = [
       { href: "/admin/blockchain", label: "Blockchain" },
       { href: "/admin/wallets", label: "Wallets" },
       { href: "/admin/treasury", label: "Treasury" },
+      { href: "/admin/facilitator", label: "Facilitator" },
       { href: "/admin/notifications", label: "Notifications" },
     ],
   },
   {
     label: "Growth",
-    items: [{ href: "/admin/referrals", label: "Referrals" }],
+    items: [
+      { href: "/admin/referrals", label: "Referrals" },
+      { href: "/admin/bazaar", label: "Bazaar" },
+    ],
   },
 ];
 

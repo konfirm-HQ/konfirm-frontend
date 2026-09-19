@@ -6,7 +6,9 @@ import Link from "next/link";
 import { apiPost } from "@/lib/api";
 import { useRequireAuth } from "@/lib/useAuth";
 
-type Currency = "XLM" | "USDC";
+type Currency = "XLM" | "USDC" | "EURC";
+
+const CURRENCY_SYMBOLS: Record<Currency, string> = { XLM: "", USDC: "$", EURC: "€" };
 
 interface Merchant {
   name: string;
@@ -96,7 +98,7 @@ export default function NewPaymentPage() {
             </p>
 
             <div className="amount-row">
-              <span className={`dollar${currency !== "USDC" ? " hidden" : ""}`}>$</span>
+              <span className={`dollar${currency === "XLM" ? " hidden" : ""}`}>{CURRENCY_SYMBOLS[currency]}</span>
               <input
                 className="amount-input"
                 type="text"
@@ -108,7 +110,7 @@ export default function NewPaymentPage() {
               />
             </div>
             <div className="currency-toggle">
-              {(["XLM", "USDC"] as Currency[]).map((c) => (
+              {(["XLM", "USDC", "EURC"] as Currency[]).map((c) => (
                 <button
                   key={c}
                   type="button"
